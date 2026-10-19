@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Then and Now</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Sans+Narrow:wght@400;700&family=Charis+SIL&display=block">
+<style>
+  /* Type from the Decode deep-read system (deep-time-v2/DESIGN.md): PT Sans Narrow for what you read first, Charis SIL
+     for sources. Sentence case, no tracking, no mono. Colour only where it means something: red is you, gold is the signal. */
+  :root {
+    --ink: #000; --soil: #1D1A17; --light: #F1EEE8; --dim: rgba(241,238,232,.58); --you: #E0201A; --sig: #E2A93A;
+    --narrow: "PT Sans Narrow", "Arial Narrow", sans-serif; --read: "Charis SIL", Charter, Georgia, serif;
+    --bg: #1D1A17;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1D1A17; } }
+  :root[data-theme="dark"] { --bg: #1D1A17; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); -webkit-font-smoothing: antialiased; }
+  /* on a small screen the script sizes #stage to a 1280 x 800 desktop layout and scales it down; its fixed children then
+     sit inside it (a transformed parent contains fixed elements) */
+  #stage { position: fixed; inset: 0; transform-origin: 0 0; overflow: hidden; }
+  canvas { position: fixed; inset: 0; display: block; }
+  #words { transition: opacity .35s; pointer-events: none; }
+  #words.out { opacity: 0; }
+  #now span { display: block; }
+  #fact { font-weight: 400; font-size: 0.62em; line-height: 1.15; margin-top: 0.3em; }
+  #words p { position: fixed; margin: 0; font-family: var(--narrow); font-weight: 700; line-height: 1.06; color: var(--ink); text-wrap: balance; }
+  .foot { position: fixed; left: max(16px, 4%); right: max(16px, 4%); bottom: 50px; font-family: var(--read); font-size: 13.5px; line-height: 1.35; color: var(--dim); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 24px; pointer-events: none; transition: opacity .35s; }
+  .foot .ring { display: inline-block; width: 0.75em; height: 0.75em; border: 1.5px solid var(--sig); border-radius: 50%; vertical-align: -0.08em; margin-right: 0.45em; }
+  .foot .off { visibility: hidden; }
+  nav { position: fixed; left: 0; right: 0; bottom: 0; height: 42px; display: flex; align-items: center; gap: 2px; padding: 0 max(16px, 4vw); overflow-x: auto; scrollbar-width: none; }
+  .tall nav { background: var(--bg); }
+  nav::-webkit-scrollbar { display: none; }
+  nav button { flex: none; border: 0; background: none; cursor: pointer; font-family: var(--narrow); font-size: 16px; color: var(--dim); padding: 8px 8px; position: relative; }
+  nav button:first-child { padding-left: 0; }
+  nav button:hover { color: var(--light); }
+  nav button.on { color: var(--light); font-weight: 700; }
+  nav button.on::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 4px; height: 2px; background: var(--light); transform-origin: left; transform: scaleX(var(--p, 0)); }
+  nav button.on:first-child::after { left: 0; }
+  @media (max-width: 699px) {
+    nav button { font-size: 15px; }
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+<canvas id="cv"></canvas>
+<div id="words"><p id="then"></p><p id="now"><span id="main"></span><span id="fact"></span></p></div>
+<div class="foot" id="foot"><span id="src"></span><span id="key"><span class="ring"></span>Gold rings: the alarm is on</span></div>
+</div>
+<nav id="nav"></nav>
+<script type="module" src="./line/src/site.js"></script>
+</body>
+</html>
