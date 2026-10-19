@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Then and Now Layouts</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Sans+Narrow:wght@400;700&family=Charis+SIL&display=block">
+<style>
+  :root { --bg: #14110F; --card: #1D1A17; --light: #F1EEE8; --dim: rgba(241,238,232,.62); --you: #E0201A; --narrow: "PT Sans Narrow", "Arial Narrow", sans-serif; --read: "Charis SIL", Charter, Georgia, serif; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #14110F; } }
+  :root[data-theme="dark"] { --bg: #14110F; }
+  html { background: var(--bg); }
+  body { margin: 0; background: var(--bg); color: var(--light); font-family: var(--read); -webkit-font-smoothing: antialiased; }
+  header { padding: 28px 16px 8px; max-width: 1180px; margin: 0 auto; }
+  h1 { font-family: var(--narrow); font-size: 34px; line-height: 1.05; margin: 0 0 10px; }
+  header p { font-size: 15px; line-height: 1.45; color: var(--dim); max-width: 62ch; margin: 0 0 10px; }
+  #topics { display: flex; flex-wrap: wrap; gap: 4px 2px; margin: 14px 0 0; }
+  #topics button { border: 0; background: none; color: var(--dim); font-family: var(--narrow); font-size: 16px; padding: 6px 8px; cursor: pointer; }
+  #topics button:first-child { padding-left: 0; }
+  #topics button.on { color: var(--light); font-weight: 700; text-decoration: underline; text-underline-offset: 5px; text-decoration-thickness: 2px; }
+  #grid { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 56px 40px; padding: 28px 16px 80px; max-width: 1300px; margin: 0 auto; }
+  .opt { width: 375px; max-width: 100%; }
+  .opt h2 { font-family: var(--narrow); font-size: 24px; margin: 0 0 4px; display: flex; gap: 10px; align-items: baseline; }
+  .opt h2 span { color: var(--dim); font-weight: 400; font-size: 18px; }
+  .opt p { font-size: 14px; line-height: 1.42; color: var(--dim); margin: 0 0 14px; min-height: 3.9em; }
+  .frame { position: relative; width: 375px; overflow: hidden; border-radius: 14px; box-shadow: 0 0 0 1px rgba(241,238,232,.14); }
+  .frame canvas { display: block; }
+  .frame .over { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+  .fold { position: absolute; left: 0; right: 0; height: 0; border-top: 2px dashed rgba(241,238,232,.5); pointer-events: none; }
+  .fold span { position: absolute; right: 8px; top: 2px; font: 11px var(--narrow); color: #14110F; background: rgba(241,238,232,.85); padding: 1px 6px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Then and Now: 26 ways to arrange one strip</h1>
+  <p>Every option shows the same topic, the same two pictures, the same words and the same ancestor (picked 180,000 years ago). Only the arrangement of the line, the ancestors' picture and your picture changes.</p>
+  <p>Each frame is a phone screen 375 wide. A dashed line marks where the first screen ends on the longer ones. On desktop the chosen strip sits in the middle of the screen at the same proportions. Pick a topic to redraw them all.</p>
+  <div id="topics"></div>
+</header>
+<main id="grid"></main>
+<script type="module" src="./line/src/options.js"></script>
+</body>
+</html>

@@ -82,6 +82,7 @@ export function stone(ctx, x, y, r, color, rot = 0) {
 // pulsing rings: a signal that is on
 export function signal(ctx, x, y, r, t, on, color = '#FFB13B') {
   if (on <= 0) return;
+  if (globalThis.__sigLog) { const m = ctx.getTransform(); globalThis.__sigLog.push({ x: m.a * x + m.c * y + m.e, y: m.b * x + m.d * y + m.f, r: r * Math.hypot(m.a, m.b) }); } // lets a page find where the alarm is
   for (let k = 0; k < 3; k++) {
     const u = ((t * 0.9 + k / 3) % 1);
     const rr = r * (0.35 + u * 1.1);
