@@ -21,9 +21,9 @@ const N = 11100;
 // that changes from topic to topic: quick bursts, pauses, runs that speed up, runs that slow down, and a last one
 // held for a beat. Seconds per picked generation; REST is the pause after the last, before the next topic.
 const RHYTHMS = [
-  [5.5, 0.35, 0.3, 0.3, 0.35, 2.4, 0.9, 0.6, 0.4, 0.3, 0.25, 0.25, 2.6],          // burst, pause, run that speeds up
-  [4.5, 1.6, 0.3, 0.25, 0.25, 0.3, 0.4, 0.6, 0.9, 1.4, 2.8],                       // a step, then a run that slows down
-  [5.0, 0.3, 0.3, 2.0, 0.3, 0.3, 0.3, 1.8, 0.45, 0.35, 0.3, 0.25, 0.2, 0.2, 2.4],  // two short bursts, then a rush
+  [5.5, 0.6, 0.6, 0.65, 1.8, 1.1, 0.85, 0.7, 0.6, 2.2],          // burst, pause, run that speeds up
+  [4.5, 1.5, 0.6, 0.6, 0.7, 0.85, 1.1, 1.4, 2.2],                // a step, then a run that slows down
+  [5.0, 0.6, 0.6, 1.7, 0.6, 0.6, 1.5, 0.8, 0.7, 0.6, 0.6, 2.2],  // two short bursts, then a rush
 ];
 const REST = 1.5;
 const PLAN = TOPICS.map((tp, ti) => { const s = []; let tt = 0; for (const d of RHYTHMS[ti % RHYTHMS.length]) { s.push({ t0: tt, t1: tt + d, d }); tt += d; } return { s, T: tt + REST }; });
