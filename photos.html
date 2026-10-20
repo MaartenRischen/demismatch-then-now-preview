@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Then and Now Photographs</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Sans+Narrow:wght@400;700&family=Charis+SIL&display=swap">
+<style>
+  /* Every photograph on the strip page, by topic, with the date and place it was made for. For review: each has its id. */
+  :root { --light: #F1EEE8; --dim: rgba(241,238,232,.6); --you: #E0201A; --bg: #1D1A17;
+    --narrow: "PT Sans Narrow", "Arial Narrow", sans-serif; --read: "Charis SIL", Charter, Georgia, serif; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1D1A17; } }
+  :root[data-theme="dark"] { --bg: #1D1A17; }
+  html, body { margin: 0; background: var(--bg); color: var(--light); -webkit-font-smoothing: antialiased; }
+  main { padding: 28px 16px 60px; max-width: 1800px; margin: 0 auto; }
+  h1 { font-family: var(--narrow); font-size: 30px; margin: 0 0 6px; }
+  .intro { font-family: var(--read); font-size: 14px; color: var(--dim); margin: 0 0 30px; max-width: 70ch; line-height: 1.5; }
+  section { margin: 0 0 44px; }
+  h2 { font-family: var(--narrow); font-size: 22px; margin: 0 0 2px; }
+  .lines { font-family: var(--narrow); font-size: 17px; color: var(--dim); margin: 0 0 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 14px; }
+  figure { margin: 0; }
+  figure img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #2B2723; }
+  figure.now img { outline: 2px solid var(--you); outline-offset: -2px; }
+  figcaption { font-family: var(--read); font-size: 12.5px; line-height: 1.4; color: var(--dim); padding-top: 6px; }
+  figcaption b { font-family: var(--narrow); font-size: 15px; color: var(--light); font-weight: 700; }
+  figcaption code { font-size: 11px; color: rgba(241,238,232,.45); }
+</style>
+</head>
+<body>
+<main>
+<h1>The photographs</h1>
+<p class="intro">Every photograph the strip page uses. Each ancestors' photograph is made for the generation it stands for: where people lived at that date, what they had, and the topic's "then" sentence. The red-edged one is you, now. The small code under each is its name, if you want one redone.</p>
+<div id="topics"></div>
+</main>
+<script type="module">
+import { PHOTOS } from './line/photos/manifest.js';
+import { TOPICS } from './line/src/personal-copy.js';
+const fmt = (y) => (y >= 10000 ? Math.round(y / 1000) * 1000 : Math.round(y / 100) * 100).toLocaleString('en-US') + ' years ago'; // as the strip page rounds them
+const el = (t, cls, html) => { const e = document.createElement(t); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
+const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const root = document.getElementById('topics');
+for (const tp of TOPICS) {
+  const sec = el('section'); sec.id = tp.key;
+  sec.append(el('h2', '', esc(tp.title)), el('p', 'lines', esc(tp.then) + '<br>' + esc(tp.now)));
+  const grid = el('div', 'grid');
+  const rows = PHOTOS.filter((p) => p.key === tp.key).sort((a, b) => (a.kind === 'now') - (b.kind === 'now'));
+  for (const p of rows) {
+    const f = el('figure', p.kind === 'now' ? 'now' : '');
+    const img = el('img'); img.loading = 'lazy'; img.alt = p.sit; img.src = `line/photos/web/${p.id}.webp`;
+    const head = p.kind === 'now' ? '<b>You, now</b>' : `<b>${fmt(p.years)}</b>, ${esc(p.place)}`;
+    f.append(img, el('figcaption', '', `${head}. ${esc(p.sit)} <code>${p.id}</code>`));
+    grid.append(f);
+  }
+  sec.append(grid); root.append(sec);
+}
+</script>
+</body>
+</html>
