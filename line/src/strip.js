@@ -58,10 +58,8 @@ function resize() {
   const x0 = xL + fh * 0.3, x1 = xR - fh * 0.5;
   const above = lift + hp * 0.55 + r;                 // from the ground up to the top of the picked person's ring
   const ycy = -hp * 0.55;                             // your ring's centre, relative to the ground
-  // your funnel runs from your ring down to the corners of your picture. Make it tall enough that its left edge
-  // clears the caption under the line.
-  ctx.font = `700 12.5px ${NARROW}`; const capW = ctx.measureText(CAPTION[0]).width + (ctx.font = `400 12.5px ${NARROW}`, ctx.measureText(CAPTION[1]).width);
-  const capY = 15, depth = capY + 8 - ycy, span = x1 - r - xL, G = Math.max(70, depth / Math.max(0.2, 1 - (capW + 12) / span));
+  // under the line: the timeline (row 1) and what the line is (row 2); your picture starts below them
+  const capY = 33, G = capY + 34 - ycy;
   const top = 22, gapA = 22, block = gapA + above + (G + ycy);
   const fit = top + hA + 12 + block + 12 + hB + 12 + NAV;
   // with room to spare (a desktop) the sources fit on the screen too
@@ -110,15 +108,30 @@ const FEELS = {
 function stroke(c, pts, col, w, a) { c.save(); c.globalAlpha = a; c.strokeStyle = col; c.lineWidth = w; c.lineCap = 'round'; c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.stroke(); c.restore(); }
 function ring(c, x, y, r, col, a) { c.save(); c.globalAlpha = a; c.strokeStyle = col; c.lineWidth = 2; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.stroke(); c.restore(); }
 // a map-inset funnel: from the two sides of a ring to two corners of a picture
-function funnel(c, x, y, r, xa, ya, xb, yb, col, fill, a) {
+// skip: boxes [x, y, w, h] the two edge lines break around, so they never run through words
+function funnel(c, x, y, r, xa, ya, xb, yb, col, fill, a, skip = []) {
   if (a < 0.02) return;
   c.save(); c.globalAlpha = a; c.fillStyle = fill;
   c.beginPath(); c.moveTo(x - r, y); c.lineTo(xa, ya); c.lineTo(xb, yb); c.lineTo(x + r, y); c.closePath(); c.fill(); c.restore();
+  c.save(); c.beginPath(); c.rect(0, 0, W, PH); for (const q of skip) c.rect(...q); c.clip('evenodd');
   stroke(c, [[x - r, y], [xa, ya]], col, 1.25, a); stroke(c, [[x + r, y], [xb, yb]], col, 1.25, a);
+  c.restore();
 }
 function text(c, s, x, y, { col = DIM, bold = false, size = 12.5, align = 'left', a = 1 } = {}) {
   c.save(); c.globalAlpha = a; c.font = `${bold ? 700 : 400} ${size}px ${NARROW}`; c.textAlign = align; c.textBaseline = 'middle'; c.fillStyle = col; c.fillText(s, x, y);
   const w = c.measureText(s).width; c.restore(); return w;
+}
+// the words under the line, laid out once per frame: row 1 is the timeline (300,000 years ago to now), row 2 what the
+// line is. Each has a box, padded, for the funnel lines to break around.
+function lineWords(c) {
+  const L = LAY, y1 = L.yR + 16, y2 = L.yR + L.capY, out = [];
+  const add = (s, x, y, o) => { c.font = `${o.bold ? 700 : 400} ${o.size || 12.5}px ${NARROW}`; const w = c.measureText(s).width, l = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x; out.push({ s, x, y, o, w, box: [l - 5, y - 10, w + 10, 20] }); return w; };
+  const w300 = add('300,000 years ago', L.xL, y1, { col: LIGHT, bold: true, size: 13.5 });
+  for (const [yrs, t] of [[200000, '200,000'], [100000, '100,000']]) { const x = xOf(yrs / 27); if (x - 22 > L.xL + w300 + 8) add(t, x, y1, { align: 'center' }); }
+  add('Now', L.xR, y1, { col: NOW, bold: true, size: 13.5, align: 'right' });
+  c.font = `700 12.5px ${NARROW}`; const c0 = c.measureText(CAPTION[0]).width; c.font = `400 12.5px ${NARROW}`; const c1 = c.measureText(CAPTION[1]).width;
+  const l = (L.xL + L.xR) / 2 - (c0 + c1) / 2; add(CAPTION[0], l, y2, { col: LIGHT, bold: true }); add(CAPTION[1], l + c0, y2, {});
+  return out;
 }
 const fmtYears = (g) => { const y = g * 27, r = y >= 10000 ? Math.round(y / 1000) * 1000 : Math.round(y / 100) * 100; return r.toLocaleString('en-US') + ' years ago'; };
 const xOf = (g) => LAY.x1 - (g / N) * (LAY.x1 - LAY.x0);
@@ -130,11 +143,14 @@ function frame(T) {
   const xa = xOf(P.g), xy = L.x1, alA = (0.55 + 0.45 * P.amt) * P.fade;
   const pb = yR - L.lift * P.amt, pcy = pb - hp * 0.55, ycy = yR - hp * 0.55;
   // the two funnels first, under everything else
-  funnel(c, xy, ycy, r, b[0], b[1], b[0] + b[2], b[1], RED, 'rgba(224,32,26,0.08)', P.fade);
+  const words = lineWords(c);
+  funnel(c, xy, ycy, r, b[0], b[1], b[0] + b[2], b[1], RED, 'rgba(224,32,26,0.08)', P.fade, words.map((q) => q.box));
   const tq = topPhoto(P), bl = corner(tq, -tq.w / 2, tq.h / 2), br = corner(tq, tq.w / 2, tq.h / 2);
   funnel(c, xa, pcy, r, ...bl, ...br, LIGHT, 'rgba(241,238,232,0.06)', alA);
-  // the ground, then the procession, oldest on the left, everyone walking towards you
-  stroke(c, [[L.xL, yR + 0.5], [L.xR, yR + 0.5]], LIGHT, 1, 0.3);
+  // the ground is the timeline: 300,000 years ago at the left, now at the right, an arrow pointing to now
+  stroke(c, [[L.xL, yR + 0.5], [L.xR, yR + 0.5]], LIGHT, 1.5, 0.6);
+  stroke(c, [[L.xR - 6, yR - 4], [L.xR, yR + 0.5], [L.xR - 6, yR + 5]], LIGHT, 1.5, 0.6);
+  for (const yrs of [300000, 200000, 100000]) { const x = xOf(yrs / 27); stroke(c, [[x, yR], [x, yR + (yrs === 300000 ? 7 : 5)]], LIGHT, 1.5, 0.6); }
   const pitch = (L.x1 - L.x0) / N, m = Math.pow(2, Math.ceil(Math.log2(3.6 / pitch))), gap = fh * 0.55 * P.amt;
   for (let g = Math.floor((N - 1) / m) * m; g >= m; g -= m) {
     const x = xOf(g); if (Math.abs(x - xa) < gap || xy - x < fh * 0.55) continue;
@@ -152,15 +168,9 @@ function frame(T) {
   const age = fmtYears(P.g); c.font = `700 13px ${NARROW}`; const aw = c.measureText(age).width;
   const right = xa + r + 8 + aw < xy - r - 8, ax = right ? xa + r + 7 : xa - r - 7;
   text(c, age, ax, pcy0(L) + 8, { col: LIGHT, bold: true, size: 13, align: right ? 'left' : 'right', a: alA * P.amt });
-  // what the line is, under it; where it starts, over its first figures (unless the picked person is there); now, under you
-  const w0 = text(c, CAPTION[0], L.xL, yR + L.capY, { col: LIGHT, bold: true });
-  text(c, CAPTION[1], L.xL + w0, yR + L.capY);
-  text(c, 'Now', xy, yR + L.capY, { col: NOW, bold: true, align: 'center' });
-  c.font = `400 12.5px ${NARROW}`; const sw = c.measureText('300,000 years ago').width, lab = right ? [xa - r, ax + aw] : [ax - aw, xa + r];
-  const clear = lab[0] - (L.xL + sw) > 10 ? 1 : 0;
-  const yl = pcy0(L) + 8; // the same height as the picked person's age
-  stroke(c, [[L.xL, yl - 6], [L.xL, yR + 4]], LIGHT, 1, 0.45);
-  text(c, '300,000 years ago', L.xL + 5, yl, { a: clear ? 1 : 0 });
+  // the picked person's place on the timeline
+  stroke(c, [[xa, yR - 1], [xa, yR + 6]], LIGHT, 2, alA * P.amt);
+  for (const q of words) text(c, q.s, q.x, q.y, q.o);
   pictures(c, P, T);
   ui(P);
 }
