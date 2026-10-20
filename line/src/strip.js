@@ -2,14 +2,16 @@
 // arranged for 300,000 years and a picture from one generation, the line of generations, your picture and why it's
 // normal. The line is drawn straight onto the page with no backdrop of its own: a procession of your ancestors walking
 // towards you, as wide as the pictures. Each picture opens out of its person on the line like an inset on a map.
-// The pictures are photographs (line/photos/, made by line/tools/photos-gen.mjs): one for every generation picked,
-// set where people lived at that date, and one of you per topic. The drawn version is strip.v4.js.
 import { clamp, smooth, easeInOut, hash, mix, glow, offscreen } from '../../v4/src/art.js';
 import { drawFigure, POSES, walkPose, body } from '../../v4/src/figure.js';
 import { signal } from '../../v4/src/props.js';
+import { sceneCover, coverWith } from './variants/kit.js';
+import { MOMENTS } from './moments.js';
+import { registerTopics } from './topics.js';
+import { setFeeling } from './frame.js';
 import { TOPICS, SCALE_SRC } from './personal-copy.js';
-import { POINTS } from '../photos/points.js';
 
+registerTopics([...new Set(TOPICS.map((t) => t.eea))].filter((k) => !['lonely', 'missed', 'stress', 'light', 'compare', 'baby', 'old', 'food'].includes(k)).map((k) => ({ key: k, signal: true })));
 const $ = (id) => document.getElementById(id);
 const cv = $('cv'), ctx = cv.getContext('2d');
 const N = 11100;
@@ -46,7 +48,7 @@ const CAPTION = ['11,100 generations', ' of your ancestors'];
 // One column, as wide as a phone (a bit wider on a tall desktop window), centred. Everything down to the end of the
 // second sentence fits one screen; the sources may sit just below it.
 const NAV = 46;
-let W = 0, H = 0, PH = 0, dpr = 1, LAY = null;
+let W = 0, H = 0, PH = 0, dpr = 1, LAY = null; const S = {};
 function resize() {
   dpr = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight;
   const SW = Math.min(W, Math.round(clamp(H * 0.54, 380, 540))), m = 16, cw = SW - 2 * m, xL = Math.round((W - SW) / 2) + m, xR = xL + cw;
@@ -72,7 +74,7 @@ function resize() {
   $('then').style.cssText = st + `bottom:${PH - a[1] + 12}px`;
   $('now').style.cssText = st + `top:${LAY.now}px`;
   $('foot').style.cssText = `left:${xL}px;width:${cw}px;top:${LAY.src}px`;
-  shown = -1; CUT = new Map();
+  shown = -1; PILE = { ti: -1, items: [] }; LIVE = null;
 }
 // the tallest each block of words gets at this size and width, across all topics: [then, now, sources]
 function heights(fs, width) {
@@ -89,46 +91,18 @@ function heights(fs, width) {
 }
 const srcText = (tp) => 'Sources: ' + tp.src + '. Time scale: ' + SCALE_SRC + '.';
 
-// ---------- the photographs ----------
-// <topic>-<pick>.webp for the ancestors, now-<topic>.webp for you. POINTS[id] = [x, y, r]: the head of the person
-// whose alarm is on, as fractions of the photograph's width and height (line/tools/photos-points.mjs).
-const thenId = (ti, i) => `${TOPICS[ti].key}-${String(i).padStart(2, '0')}`, nowId = (ti) => `now-${TOPICS[ti].key}`;
-const IMG = new Map();
-function want(id) {
-  let im = IMG.get(id);
-  if (!im) {
-    im = new Image(); im.decoding = 'async';
-    im.onload = () => { im.at = performance.now(); if (freeze !== null && LAY) frame(freeze + offset); };
-    im.src = new URL(`../photos/web/${id}.webp`, import.meta.url).href; IMG.set(id, im);
-  }
-  return im;
-}
-const ready = (id) => { const im = want(id); return im.complete && im.naturalWidth ? im : null; };
-const shown01 = (im) => (im.at && freeze === null ? smooth(performance.now() - im.at, 0, 350) : 1); // a photograph that just arrived fades in
-const topicIds = (ti) => [nowId(ti), ...PLAN[ti].s.map((_, i) => thenId(ti, i))];
-// the topic on screen and the next one, about 1.3 MB each; the rest wait for their turn (all of them are 21 MB)
-function preload(ti) { for (const id of [...topicIds(ti), ...topicIds((ti + 1) % TOPICS.length)]) want(id); }
-// a photograph filling a box, cropped to fit, pushed in by z around the point (fx, fy); returns how to find a point of
-// the photograph in the box
-function cover(c, im, x, y, w, h, z = 1, fx = 0.5, fy = 0.5) {
-  const iw = im.naturalWidth, ih = im.naturalHeight, s = Math.max(w / iw, h / ih) * z, sw = w / s, sh = h / s;
-  const sx = clamp(fx * iw - sw / 2, 0, iw - sw), sy = clamp(fy * ih - sh / 2, 0, ih - sh);
-  c.drawImage(im, sx, sy, sw, sh, x, y, w, h);
-  return (px, py) => [x + (px * iw - sx) * s, y + (py * ih - sy) * s, s * iw];
-}
-// the gold rings on whoever's alarm is on in a photograph
-// (sized to the head, but never more than a sixth of the picture's height). The same three widening rings as the
-// line's signal, without its glow, which would tint the face; a soft shadow keeps them clear on bright ground.
-function alarm(c, at, id, T, a, h) {
-  const p = POINTS[id]; if (!p || a < 0.02) return;
-  const [x, y, pw] = at(p[0], p[1]), r = clamp(p[2] * pw * 1.15, 8, h * 0.17);
-  const g0 = c.globalAlpha; c.save(); c.shadowColor = 'rgba(0,0,0,0.7)'; c.shadowBlur = 3; c.strokeStyle = GOLD;
-  for (let k = 0; k < 3; k++) {
-    const u = (T * 0.9 + k / 3) % 1; c.globalAlpha = g0 * a * (1 - u) * 0.95; c.lineWidth = Math.max(1.4, r * 0.07 * (1 - u * 0.5));
-    c.beginPath(); c.arc(x, y, r * (0.75 + u * 0.9), 0, Math.PI * 2); c.stroke();
-  }
-  c.restore();
-}
+// ---------- who feels it, in the ancestors' pictures ----------
+const pick = (people, n, test) => people.map((q, i) => [q, i]).filter(([q]) => test(q)).sort((x, y) => x[0].d - y[0].d).slice(0, n).map(([, i]) => i);
+const or0 = (ids) => (ids.length ? ids : [0]);
+const farFromFire = (people, K) => { if (K.fire === undefined) return [0]; let best = 0; people.forEach((q, i) => { if (q.p !== 'lie' && Math.abs(q.x - K.fire) > Math.abs(people[best].x - K.fire)) best = i; }); return [best]; };
+const FEELS = {
+  strangers: (b, P) => or0(pick(P, 2, (q) => q.kind !== 'child' && (q.p === 'look' || q.p === 'stand') && q.d < 0.65)),
+  leftout: (b, P, K) => farFromFire(P, K), night: () => [0], newparent: (b, P) => or0(pick(P, 1, (q) => q.baby)),
+  news: (b, P) => or0(pick(P, 2, (q) => q.p === 'look' || q.p === 'throw')), compare: () => [0],
+  touch: (b, P) => or0(pick(P, 1, (q) => q.p === 'hug' || q.p === 'holdHand' || q.baby)), speaking: () => [0],
+  useful: (b, P) => or0(pick(P, 1, (q) => q.old)), burnout: (b, P) => or0(pick(P, 1, (q) => q.p === 'carry' || q.p === 'crouch' || q.p === 'reach')),
+  crowd: (b, P, K) => farFromFire(P, K),
+};
 
 // ---------- drawing ----------
 function stroke(c, pts, col, w, a) { c.save(); c.globalAlpha = a; c.strokeStyle = col; c.lineWidth = w; c.lineCap = 'round'; c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.stroke(); c.restore(); }
@@ -203,7 +177,8 @@ function frame(T) {
 // ---------- the ancestors' pictures: a pile of photographs ----------
 // Every generation picked in a topic leaves its photograph on the pile. The newest drops on top, slightly turned; the
 // ones before it stay underneath, so the pile grows as the run goes on. It clears when the topic changes.
-const PRINT = '#EEE8DC', BORDER = 5, DARK = '#2B2723';
+const PRINT = '#EEE8DC', BORDER = 5;
+let PILE = { ti: -1, items: [] }, LIVE = null;
 // where photograph j of topic ti lies: a small turn, alternating sides, and a small shift
 function photoAt(ti, j) {
   const h1 = hash(ti * 31.7 + j * 7.3), h2 = hash(ti * 11.1 + j * 3.9 + 5), h3 = hash(ti * 5.3 + j * 13.1 + 9);
@@ -211,13 +186,14 @@ function photoAt(ti, j) {
 }
 // the outer size of a print: a little smaller than the picture's place, so a turned one still fits the column
 function photoBox() { const [x, y, w, h] = LAY.a; return { cx: x + w / 2, cy: y + h / 2, w: w - 10, h: h - 10 }; }
-// the prints under the top one don't move, so each is cut to size once
-let CUT = new Map();
-function cut(id, w, h) {
-  const im = ready(id); if (!im) return null;
-  let o = CUT.get(id);
-  if (!o) { o = offscreen(w, h, dpr); cover(o.ctx, im, 0, 0, w, h); CUT.set(id, o.c); o = o.c; }
-  return o;
+const inner = () => { const B = photoBox(); return [Math.round(B.w - 2 * BORDER), Math.round(B.h - 2 * BORDER)]; };
+// the scene for generation g at the print's inner size, into a canvas of its own
+function develop(o, tp, g, T, slot) {
+  const [iw, ih] = inner();
+  setFeeling(tp.signal ? FEELS[tp.key] || null : null);
+  sceneCover(S, slot, o.ctx, 0, 0, iw, ih, g, T, { beat: tp.eea });
+  setFeeling(null);
+  return o.c;
 }
 // where the top photograph is this frame: it drops in from a little above, larger and more turned, and settles
 function topPhoto(P) {
@@ -225,36 +201,23 @@ function topPhoto(P) {
   return { cx: B.cx + p.dx, cy: B.cy + p.dy - (1 - e) * 14, rot: p.rot * (1 + (1 - e) * 1.5), sc: 1 + (1 - e) * 0.06, a: e, w: B.w, h: B.h };
 }
 const corner = (q, x, y) => [q.cx + (x * Math.cos(q.rot) - y * Math.sin(q.rot)) * q.sc, q.cy + (x * Math.sin(q.rot) + y * Math.cos(q.rot)) * q.sc];
-// one photograph: a pale print with a soft shadow, turned about its centre; paint(c, x, y, w, h) fills the picture
-function print(c, q, paint) {
+// one photograph: a pale print with a soft shadow, turned about its centre
+function print(c, q, img) {
   c.save(); c.globalAlpha *= q.a; c.translate(q.cx, q.cy); c.rotate(q.rot); c.scale(q.sc, q.sc);
   c.shadowColor = 'rgba(0,0,0,0.55)'; c.shadowBlur = 14; c.shadowOffsetY = 4; c.fillStyle = PRINT; c.fillRect(-q.w / 2, -q.h / 2, q.w, q.h);
-  c.shadowColor = 'transparent'; const x = -q.w / 2 + BORDER, y = -q.h / 2 + BORDER, w = q.w - 2 * BORDER, h = q.h - 2 * BORDER;
-  c.fillStyle = DARK; c.fillRect(x, y, w, h); c.beginPath(); c.rect(x, y, w, h); c.clip(); paint(c, x, y, w, h);
+  c.shadowColor = 'transparent'; c.drawImage(img, -q.w / 2 + BORDER, -q.h / 2 + BORDER, q.w - 2 * BORDER, q.h - 2 * BORDER);
   c.restore();
 }
 function pictures(c, P, T) {
-  const tp = P.topic, b = LAY.b, B = photoBox(), seg = PLAN[P.ti].s[P.si];
+  const tp = P.topic, b = LAY.b, B = photoBox(), [iw, ih] = inner();
   c.save(); c.globalAlpha = P.fade;
-  for (let j = 0; j < P.si; j++) {
-    const p = photoAt(P.ti, j), id = thenId(P.ti, j);
-    print(c, { cx: B.cx + p.dx, cy: B.cy + p.dy, rot: p.rot, sc: 1, a: 1, w: B.w, h: B.h }, (c2, x, y, w, h) => { const o = cut(id, w, h); if (o) c2.drawImage(o, x, y, w, h); });
-  }
-  // the top print pushes in slowly while it is held
-  const id = thenId(P.ti, P.si), z = 1 + 0.045 * smooth(P.lt - seg.t0, 0, seg.d + REST);
-  print(c, topPhoto(P), (c2, x, y, w, h) => {
-    const im = ready(id); if (!im) return;
-    c2.globalAlpha *= shown01(im); const at = cover(c2, im, x, y, w, h, z, 0.5, 0.5);
-    if (tp.signal) alarm(c2, at, id, T, P.amt, h);
-  });
-  // you, now: one photograph for the whole topic, pushing in from the moment it appears
-  c.save(); c.beginPath(); c.rect(...b); c.clip(); c.fillStyle = DARK; c.fillRect(...b);
-  const nid = nowId(P.ti), im = ready(nid);
-  if (im) {
-    const pt = POINTS[nid], at = (c.globalAlpha *= shown01(im), cover(c, im, ...b, 1.02 + 0.06 * (P.lt / P.dur), pt ? pt[0] : 0.5, pt ? pt[1] : 0.45));
-    if (tp.signal) alarm(c, at, nid, T, 1, b[3]);
-  }
-  c.restore();
+  if (PILE.ti !== P.ti) PILE = { ti: P.ti, items: [] };
+  if (PILE.items.length > P.si) PILE.items.length = P.si;
+  while (PILE.items.length < P.si) PILE.items.push(develop(offscreen(iw, ih, dpr), tp, gFor(P.ti, PILE.items.length), T, 'pile'));
+  PILE.items.forEach((img, j) => { const p = photoAt(P.ti, j); print(c, { cx: B.cx + p.dx, cy: B.cy + p.dy, rot: p.rot, sc: 1, a: 1, w: B.w, h: B.h }, img); });
+  if (!LIVE) LIVE = offscreen(iw, ih, dpr);
+  print(c, topPhoto(P), develop(LIVE, tp, P.g, T, 'e'));
+  c.save(); c.beginPath(); c.rect(...b); c.clip(); coverWith(S, 'm', c, ...b, (c2, w2, h2) => MOMENTS[tp.key](c2, w2, h2, T)); c.restore();
   c.lineWidth = 2; c.strokeStyle = RED; c.strokeRect(b[0] - 1, b[1] - 1, b[2] + 2, b[3] + 2);
   c.restore();
 }
@@ -266,7 +229,7 @@ let shown = -1;
 function ui(P) {
   const words = $('words');
   if (P.ti !== shown) {
-    shown = P.ti; const tp = P.topic; preload(P.ti);
+    shown = P.ti; const tp = P.topic;
     $('then').textContent = tp.then; $('main').textContent = tp.now;
     $('src').textContent = srcText(tp); $('key').classList.toggle('off', !tp.signal);
     [...nav.children].forEach((bt, i) => bt.classList.toggle('on', i === P.ti));
@@ -295,10 +258,8 @@ addEventListener('resize', () => { resize(); if (freeze !== null) frame(freeze +
 function loop() { frame(now()); requestAnimationFrame(loop); }
 // wait for the faces the canvas uses, but never more than 2.5 s: a font that fails to load must not stop the page
 const fontsIn = Promise.allSettled(['400 14px "PT Sans Narrow"', '700 14px "PT Sans Narrow"', '400 14px "Charis SIL"'].map((f) => document.fonts.load(f)));
-// a frozen frame (?t=, for stills) also waits for its topic's photographs, up to 15 s
-const photosIn = (ti) => Promise.race([Promise.allSettled(topicIds(ti).map((id) => want(id).decode())), new Promise((r) => setTimeout(r, 15000))]);
-Promise.race([fontsIn, new Promise((r) => setTimeout(r, 2500))]).then(async () => {
+Promise.race([fontsIn, new Promise((r) => setTimeout(r, 2500))]).then(() => {
   resize();
-  if (freeze !== null) { await photosIn(stateAt(freeze + offset).ti); frame(freeze + offset); window.ready = true; } else { requestAnimationFrame(loop); window.ready = true; }
+  if (freeze !== null) { frame(freeze + offset); window.ready = true; } else { requestAnimationFrame(loop); window.ready = true; }
 });
 window.__topics = TOPICS.map((t) => t.key); window.__dur = PLAN[0].T; window.__start = START;
