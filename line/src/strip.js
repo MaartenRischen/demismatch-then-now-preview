@@ -2,7 +2,7 @@
 // arranged for 300,000 years and a picture from one generation, the line of generations, your picture and why it's
 // normal. The line is drawn straight onto the page with no backdrop of its own: a procession of your ancestors walking
 // towards you, as wide as the pictures. Each picture opens out of its person on the line like an inset on a map.
-import { clamp, smooth, easeInOut, hash, mix, glow } from '../../v4/src/art.js';
+import { clamp, smooth, easeInOut, hash, mix, glow, offscreen } from '../../v4/src/art.js';
 import { drawFigure, POSES, walkPose, body } from '../../v4/src/figure.js';
 import { signal } from '../../v4/src/props.js';
 import { sceneCover, coverWith } from './variants/kit.js';
@@ -36,7 +36,7 @@ function stateAt(T) {
   const q = SEG.s[i], g = gFor(ti, i), prev = i > 0 ? gFor(ti, i - 1) : null, st = lt - q.t0;
   const amt = rest ? 0 : easeInOut(smooth(st, 0, Math.min(0.6, q.d * 0.35))) * easeInOut(smooth(q.t1 - lt, 0, Math.min(0.4, q.d * 0.25)));
   const k = rest ? 1 : smooth(st, 0, Math.min(0.3, q.d * 0.5));
-  return { ti, topic: TOPICS[ti], lt, g, amt, mr: prev !== null && k < 1 ? { from: prev, k } : null, dur: DUR, fade: smooth(lt, 0, 0.45) * (1 - smooth(lt, DUR - 0.45, DUR)) };
+  return { ti, topic: TOPICS[ti], lt, g, si: i, k, amt, mr: prev !== null && k < 1 ? { from: prev, k } : null, dur: DUR, fade: smooth(lt, 0, 0.45) * (1 - smooth(lt, DUR - 0.45, DUR)) };
 }
 
 // ---------- colours and type ----------
@@ -76,7 +76,7 @@ function resize() {
   $('then').style.cssText = st + `bottom:${PH - a[1] + 12}px`;
   $('now').style.cssText = st + `top:${LAY.now}px`;
   $('foot').style.cssText = `left:${xL}px;width:${cw}px;top:${LAY.src}px`;
-  shown = -1;
+  shown = -1; PILE = { ti: -1, items: [] }; LIVE = null;
 }
 // the tallest each block of words gets at this size and width, across all topics: [then, now, sources]
 function heights(fs, width) {
@@ -131,7 +131,8 @@ function frame(T) {
   const pb = yR - L.lift * P.amt, pcy = pb - hp * 0.55, ycy = yR - hp * 0.55;
   // the two funnels first, under everything else
   funnel(c, xy, ycy, r, b[0], b[1], b[0] + b[2], b[1], RED, 'rgba(224,32,26,0.08)', P.fade);
-  funnel(c, xa, pcy, r, a[0], a[1] + a[3], a[0] + a[2], a[1] + a[3], LIGHT, 'rgba(241,238,232,0.06)', alA);
+  const tq = topPhoto(P), bl = corner(tq, -tq.w / 2, tq.h / 2), br = corner(tq, tq.w / 2, tq.h / 2);
+  funnel(c, xa, pcy, r, ...bl, ...br, LIGHT, 'rgba(241,238,232,0.06)', alA);
   // the ground, then the procession, oldest on the left, everyone walking towards you
   stroke(c, [[L.xL, yR + 0.5], [L.xR, yR + 0.5]], LIGHT, 1, 0.3);
   const pitch = (L.x1 - L.x0) / N, m = Math.pow(2, Math.ceil(Math.log2(3.6 / pitch))), gap = fh * 0.55 * P.amt;
@@ -163,16 +164,51 @@ function frame(T) {
   pictures(c, P, T);
   ui(P);
 }
-// the two pictures: square corners, a keyline in the colour of their funnel
-function pictures(c, P, T) {
-  const tp = P.topic, [a, b] = [LAY.a, LAY.b];
-  c.save(); c.globalAlpha = P.fade;
+// ---------- the ancestors' pictures: a pile of photographs ----------
+// Every generation picked in a topic leaves its photograph on the pile. The newest drops on top, slightly turned; the
+// ones before it stay underneath, so the pile grows as the run goes on. It clears when the topic changes.
+const PRINT = '#EEE8DC', BORDER = 5;
+let PILE = { ti: -1, items: [] }, LIVE = null;
+// where photograph j of topic ti lies: a small turn, alternating sides, and a small shift
+function photoAt(ti, j) {
+  const h1 = hash(ti * 31.7 + j * 7.3), h2 = hash(ti * 11.1 + j * 3.9 + 5), h3 = hash(ti * 5.3 + j * 13.1 + 9);
+  return { rot: j === 0 ? (h1 - 0.5) * 0.02 : (j % 2 ? 1 : -1) * (0.012 + h1 * 0.045), dx: (h2 - 0.5) * 10, dy: (h3 - 0.5) * 6 };
+}
+// the outer size of a print: a little smaller than the picture's place, so a turned one still fits the column
+function photoBox() { const [x, y, w, h] = LAY.a; return { cx: x + w / 2, cy: y + h / 2, w: w - 10, h: h - 10 }; }
+const inner = () => { const B = photoBox(); return [Math.round(B.w - 2 * BORDER), Math.round(B.h - 2 * BORDER)]; };
+// the scene for generation g at the print's inner size, into a canvas of its own
+function develop(o, tp, g, T, slot) {
+  const [iw, ih] = inner();
   setFeeling(tp.signal ? FEELS[tp.key] || null : null);
-  c.save(); c.beginPath(); c.rect(...a); c.clip(); sceneCover(S, 'e', c, ...a, P.g, T, { beat: tp.eea, mr: P.mr }); c.restore();
+  sceneCover(S, slot, o.ctx, 0, 0, iw, ih, g, T, { beat: tp.eea });
   setFeeling(null);
+  return o.c;
+}
+// where the top photograph is this frame: it drops in from a little above, larger and more turned, and settles
+function topPhoto(P) {
+  const B = photoBox(), p = photoAt(P.ti, P.si), e = 1 - Math.pow(1 - P.k, 3);
+  return { cx: B.cx + p.dx, cy: B.cy + p.dy - (1 - e) * 14, rot: p.rot * (1 + (1 - e) * 1.5), sc: 1 + (1 - e) * 0.06, a: e, w: B.w, h: B.h };
+}
+const corner = (q, x, y) => [q.cx + (x * Math.cos(q.rot) - y * Math.sin(q.rot)) * q.sc, q.cy + (x * Math.sin(q.rot) + y * Math.cos(q.rot)) * q.sc];
+// one photograph: a pale print with a soft shadow, turned about its centre
+function print(c, q, img) {
+  c.save(); c.globalAlpha *= q.a; c.translate(q.cx, q.cy); c.rotate(q.rot); c.scale(q.sc, q.sc);
+  c.shadowColor = 'rgba(0,0,0,0.55)'; c.shadowBlur = 14; c.shadowOffsetY = 4; c.fillStyle = PRINT; c.fillRect(-q.w / 2, -q.h / 2, q.w, q.h);
+  c.shadowColor = 'transparent'; c.drawImage(img, -q.w / 2 + BORDER, -q.h / 2 + BORDER, q.w - 2 * BORDER, q.h - 2 * BORDER);
+  c.restore();
+}
+function pictures(c, P, T) {
+  const tp = P.topic, b = LAY.b, B = photoBox(), [iw, ih] = inner();
+  c.save(); c.globalAlpha = P.fade;
+  if (PILE.ti !== P.ti) PILE = { ti: P.ti, items: [] };
+  if (PILE.items.length > P.si) PILE.items.length = P.si;
+  while (PILE.items.length < P.si) PILE.items.push(develop(offscreen(iw, ih, dpr), tp, gFor(P.ti, PILE.items.length), T, 'pile'));
+  PILE.items.forEach((img, j) => { const p = photoAt(P.ti, j); print(c, { cx: B.cx + p.dx, cy: B.cy + p.dy, rot: p.rot, sc: 1, a: 1, w: B.w, h: B.h }, img); });
+  if (!LIVE) LIVE = offscreen(iw, ih, dpr);
+  print(c, topPhoto(P), develop(LIVE, tp, P.g, T, 'e'));
   c.save(); c.beginPath(); c.rect(...b); c.clip(); coverWith(S, 'm', c, ...b, (c2, w2, h2) => MOMENTS[tp.key](c2, w2, h2, T)); c.restore();
-  c.lineWidth = 2; c.strokeStyle = LIGHT; c.strokeRect(a[0] - 1, a[1] - 1, a[2] + 2, a[3] + 2);
-  c.strokeStyle = RED; c.strokeRect(b[0] - 1, b[1] - 1, b[2] + 2, b[3] + 2);
+  c.lineWidth = 2; c.strokeStyle = RED; c.strokeRect(b[0] - 1, b[1] - 1, b[2] + 2, b[3] + 2);
   c.restore();
 }
 
