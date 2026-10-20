@@ -23,19 +23,23 @@
   #words { transition: opacity .35s; pointer-events: none; }
   #words.out { opacity: 0; }
   #words p, .foot { position: absolute; margin: 0; }
-  #then, #now { font-family: var(--narrow); font-weight: 700; line-height: 1.06; color: var(--light); text-wrap: balance; }
+  #then, #now { font-family: var(--narrow); font-weight: 700; line-height: 1.06; color: var(--light); text-wrap: balance; text-align: center; }
   #now span { display: block; }
   #fact { font-weight: 400; font-size: 0.66em; line-height: 1.15; margin-top: 0.3em; color: var(--dim); }
-  .foot { font-family: var(--read); font-size: 11px; line-height: 1.35; color: var(--dim); }
-  .foot .ring { display: inline-block; width: 0.75em; height: 0.75em; border: 1.5px solid var(--sig); border-radius: 50%; vertical-align: -0.08em; margin: 0 0.45em 0 0.9em; }
-  .foot .off { display: none; }
-  #key { white-space: nowrap; }
-  nav { position: fixed; bottom: 0; height: 44px; display: flex; align-items: center; gap: 2px; padding: 0 12px; box-sizing: border-box; overflow-x: auto; scrollbar-width: none; background: var(--bg); box-shadow: 0 -1px 0 rgba(241,238,232,.1); }
+  .foot { font-family: var(--read); font-size: 11px; line-height: 1.4; color: rgba(241,238,232,.5); text-align: center; text-wrap: balance; }
+  #src, #key { display: block; }
+  .foot .ring { display: inline-block; width: 0.75em; height: 0.75em; border: 1.5px solid var(--sig); border-radius: 50%; vertical-align: -0.08em; margin-right: 0.45em; }
+  #key { margin-top: 0.25em; }
+  #key.off { display: none; }
+    nav { position: fixed; left: 0; right: 0; bottom: 0; height: 46px; display: flex; align-items: center; gap: 2px; padding: 0 24px; box-sizing: border-box; overflow-x: auto; scrollbar-width: none; background: var(--bg);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent); }
+  /* centred when the topics fit, scrollable when they don't */
+  nav button:first-child { margin-left: auto; } nav button:last-child { margin-right: auto; }
   nav::-webkit-scrollbar { display: none; }
-  nav button { flex: none; border: 0; background: none; cursor: pointer; font-family: var(--narrow); font-size: 16px; color: var(--dim); padding: 8px 8px; position: relative; }
+  nav button { flex: none; border: 0; background: none; cursor: pointer; font-family: var(--narrow); font-size: 16px; color: rgba(241,238,232,.5); padding: 8px 9px; position: relative; }
   nav button:hover { color: var(--light); }
   nav button.on { color: var(--light); font-weight: 700; }
-  nav button.on::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 4px; height: 2px; background: var(--light); transform-origin: left; transform: scaleX(var(--p, 0)); }
+  nav button.on::after { content: ""; position: absolute; left: 9px; right: 9px; bottom: 5px; height: 2px; background: var(--light); transform-origin: left; transform: scaleX(var(--p, 0)); }
 </style>
 </head>
 <body>
