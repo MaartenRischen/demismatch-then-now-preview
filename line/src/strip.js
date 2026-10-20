@@ -16,18 +16,27 @@ const $ = (id) => document.getElementById(id);
 const cv = $('cv'), ctx = cv.getContext('2d');
 const N = 11100;
 
-// ---------- timing (as on the site: one picked generation held, then a quick run through others) ----------
-const SEG = (() => { const s = []; let tt = 0, d = 0.95; const add = (dd) => { s.push({ t0: tt, t1: tt + dd, d: dd }); tt += dd; };
-  add(6.5); for (let k = 0; k < 10; k++) { add(d); d = Math.max(0.2, d * 0.8); } return { s, T: tt + 3 }; })();
-const DUR = SEG.T, TOTAL = DUR * TOPICS.length;
+// ---------- timing ----------
+// Each topic holds one picked generation long enough to read the sentence, then moves through others in a rhythm
+// that changes from topic to topic: quick bursts, pauses, runs that speed up, runs that slow down, and a last one
+// held for a beat. Seconds per picked generation; REST is the pause after the last, before the next topic.
+const RHYTHMS = [
+  [5.5, 0.35, 0.3, 0.3, 0.35, 2.4, 0.9, 0.6, 0.4, 0.3, 0.25, 0.25, 2.6],          // burst, pause, run that speeds up
+  [4.5, 1.6, 0.3, 0.25, 0.25, 0.3, 0.4, 0.6, 0.9, 1.4, 2.8],                       // a step, then a run that slows down
+  [5.0, 0.3, 0.3, 2.0, 0.3, 0.3, 0.3, 1.8, 0.45, 0.35, 0.3, 0.25, 0.2, 0.2, 2.4],  // two short bursts, then a rush
+];
+const REST = 1.5;
+const PLAN = TOPICS.map((tp, ti) => { const s = []; let tt = 0; for (const d of RHYTHMS[ti % RHYTHMS.length]) { s.push({ t0: tt, t1: tt + d, d }); tt += d; } return { s, T: tt + REST }; });
+const START = []; let TOTAL = 0; for (const pl of PLAN) { START.push(TOTAL); TOTAL += pl.T; }
 const gFor = (ti, i) => { const top = Math.min(11000, TOPICS[ti].span / 27 - 120); return Math.round(150 + hash(ti * 97.1 + i * 13.7 + 1) * (top - 150)); };
 function stateAt(T) {
-  const tt = ((T % TOTAL) + TOTAL) % TOTAL, ti = Math.floor(tt / DUR), lt = tt - ti * DUR, n = SEG.s.length;
+  const tt = ((T % TOTAL) + TOTAL) % TOTAL; let ti = 0; while (ti < TOPICS.length - 1 && tt >= START[ti + 1]) ti++;
+  const SEG = PLAN[ti], DUR = SEG.T, lt = tt - START[ti], n = SEG.s.length;
   let i = SEG.s.findIndex((q) => lt < q.t1); const rest = i < 0; if (rest) i = n - 1;
   const q = SEG.s[i], g = gFor(ti, i), prev = i > 0 ? gFor(ti, i - 1) : null, st = lt - q.t0;
   const amt = rest ? 0 : easeInOut(smooth(st, 0, Math.min(0.6, q.d * 0.35))) * easeInOut(smooth(q.t1 - lt, 0, Math.min(0.4, q.d * 0.25)));
   const k = rest ? 1 : smooth(st, 0, Math.min(0.3, q.d * 0.5));
-  return { ti, topic: TOPICS[ti], lt, g, amt, mr: prev !== null && k < 1 ? { from: prev, k } : null, fade: smooth(lt, 0, 0.45) * (1 - smooth(lt, DUR - 0.45, DUR)) };
+  return { ti, topic: TOPICS[ti], lt, g, amt, mr: prev !== null && k < 1 ? { from: prev, k } : null, dur: DUR, fade: smooth(lt, 0, 0.45) * (1 - smooth(lt, DUR - 0.45, DUR)) };
 }
 
 // ---------- colours and type ----------
@@ -181,18 +190,18 @@ function ui(P) {
     const on = nav.children[P.ti]; nav.scrollTo({ left: on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2, behavior: 'smooth' });
     history.replaceState(null, '', location.search + '#' + tp.key);
   }
-  const vis = P.lt > 0.15 && P.lt < DUR - 0.5;
+  const vis = P.lt > 0.15 && P.lt < P.dur - 0.5;
   words.classList.toggle('out', !vis);
-  nav.children[P.ti].style.setProperty('--p', (P.lt / DUR).toFixed(3));
+  nav.children[P.ti].style.setProperty('--p', (P.lt / P.dur).toFixed(3));
 }
 
 // ---------- time ----------
 const q = new URLSearchParams(location.search), freeze = q.has('t') ? +q.get('t') : null;
 let offset = 0, t0 = performance.now(), paused = false, pausedAt = 0;
 const now = () => (paused ? pausedAt : (performance.now() - t0) / 1000) + offset;
-function jump(i) { offset = i * DUR; t0 = performance.now(); pausedAt = 0; shown = -1; if (freeze !== null) frame(freeze + offset); }
+function jump(i) { offset = START[i]; t0 = performance.now(); pausedAt = 0; shown = -1; if (freeze !== null) frame(freeze + offset); }
 const start = TOPICS.findIndex((tp) => '#' + tp.key === location.hash);
-if (start > 0) offset = start * DUR;
+if (start > 0) offset = START[start];
 addEventListener('keydown', (e) => {
   const cur = stateAt(now()).ti;
   if (e.key === 'ArrowRight') jump((cur + 1) % TOPICS.length);
@@ -207,4 +216,4 @@ Promise.race([fontsIn, new Promise((r) => setTimeout(r, 2500))]).then(() => {
   resize();
   if (freeze !== null) { frame(freeze + offset); window.ready = true; } else { requestAnimationFrame(loop); window.ready = true; }
 });
-window.__topics = TOPICS.map((t) => t.key); window.__dur = DUR;
+window.__topics = TOPICS.map((t) => t.key); window.__dur = PLAN[0].T; window.__start = START;
