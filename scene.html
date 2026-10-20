@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Coded Scenes</title>
+<meta name="robots" content="noindex, nofollow">
+<style>html,body{margin:0;background:#111;color:#ddd;font:13px "PT Sans Narrow",sans-serif}canvas{display:block;width:100vw;height:auto}#info{position:fixed;left:8px;bottom:6px;opacity:.7}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"}}</script>
+</head><body><div id="info"></div>
+<script type="module">
+// One coded scene, full width at 16:9. ?topic=strangers&g=4000&habitat=&time=&t= (t freezes time) &w=1600
+import { createStage } from './line/src/real/stage.js';
+import { buildAncestors } from './line/src/real/world.js';
+const q = new URLSearchParams(location.search), W = +(q.get('w') || innerWidth), H = Math.round(W * 9 / 16);
+const stage = createStage({ width: W, height: H, dpr: 1 }); document.body.appendChild(stage.canvas);
+const S = buildAncestors({ topic: q.get('topic') || 'strangers', g: +(q.get('g') || 4000), renderer: stage.renderer, opts: { habitat: q.get('habitat') || undefined, time: q.get('time') || undefined } });
+if (!q.has('raw')) S.expose(stage);
+document.getElementById('info').textContent = JSON.stringify(S.info);
+const T = q.has('t') ? +q.get('t') : null, off = Object.fromEntries((q.get('off') || '').split(',').filter(Boolean).map((k) => [k, true]));
+const frame = (t) => { S.update(t); stage.render(S.scene, S.camera, t, { ...S.look, off, ...(q.has('exp') ? { exposure: +q.get('exp') } : {}) }); };
+if (T !== null) { frame(T); frame(T); window.ready = true; } else { const t0 = performance.now(); const loop = () => { frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); }; loop(); window.ready = true; }
+window.info = S.info;
+</script></body></html>

@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Coded Scenes, Now</title>
+<meta name="robots" content="noindex, nofollow">
+<style>html,body{margin:0;background:#111;color:#ddd;font:13px "PT Sans Narrow",sans-serif}canvas{display:block;width:100vw;height:auto}#info{position:fixed;left:8px;bottom:6px;opacity:.7}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"}}</script>
+</head><body><div id="info"></div>
+<script type="module">
+// One "you, now" scene, full width at 16:9. ?key=night&t=2 (t freezes time) &w=1280 &exp= &off=ao,dof,bloom &alarm=1 (marks the alarm point)
+import { createStage } from './line/src/real/stage.js';
+import { buildNow } from './line/src/real/now-scenes.js';
+const q = new URLSearchParams(location.search), W = +(q.get('w') || innerWidth), H = Math.round(W * 9 / 16);
+const stage = createStage({ width: W, height: H, dpr: 1 }); document.body.appendChild(stage.canvas);
+const num = (k) => q.get(k).split(',').map(Number), cam = {};
+if (q.has('cam')) cam.pos = num('cam'); if (q.has('at')) cam.target = num('at'); if (q.has('fov')) cam.fov = +q.get('fov'); if (q.has('cam') || q.has('at')) cam.push = 0;
+const S = buildNow({ key: q.get('key') || 'night', renderer: stage.renderer, opts: Object.keys(cam).length ? { cam, q } : { q } });
+document.getElementById('info').textContent = JSON.stringify(S.info);
+const T = q.has('t') ? +q.get('t') : null, off = Object.fromEntries((q.get('off') || '').split(',').filter(Boolean).map((k) => [k, true]));
+let dot = null;
+if (q.has('alarm')) { dot = document.createElement('div'); dot.style.cssText = 'position:fixed;width:14px;height:14px;margin:-7px;border:2px solid gold;border-radius:50%'; document.body.appendChild(dot); }
+const frame = (t) => {
+  S.update(t); stage.render(S.scene, S.camera, t, { ...S.look, off, ...(q.has('exp') ? { exposure: +q.get('exp') } : {}) });
+  if (dot) { const p = (S.alarmPoint() || S.youPoint()).project(S.camera); const r = stage.canvas.getBoundingClientRect(); dot.style.left = (r.left + (p.x + 1) / 2 * r.width) + 'px'; dot.style.top = (r.top + (1 - p.y) / 2 * r.height) + 'px'; }
+};
+if (T !== null) { frame(T); frame(T); window.ready = true; } else { const t0 = performance.now(); const loop = () => { frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); }; loop(); window.ready = true; }
+window.info = S.info; window.S = S; window.frame = frame;
+</script></body></html>
