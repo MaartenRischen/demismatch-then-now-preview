@@ -88,7 +88,7 @@ function resizeTall() {
 function heights(fs, width) {
   const a = $('then'), b = $('now'), keep = [a.textContent, $('main').textContent, $('fact').textContent];
   a.style.cssText = b.style.cssText = `left:0;top:0;width:${width}px;font-size:${fs}px;visibility:hidden`;
-  const out = TOPICS.map((tp) => { a.textContent = tp.then; $('main').textContent = tp.now; $('fact').textContent = tp.fact; return [a.offsetHeight, b.offsetHeight]; });
+  const out = TOPICS.map((tp) => { a.textContent = tp.then; $('main').textContent = tp.now; $('fact').textContent = tp.fact || ''; return [a.offsetHeight, b.offsetHeight]; });
   [a.textContent, $('main').textContent, $('fact').textContent] = keep;
   return out;
 }
@@ -221,7 +221,7 @@ function ui(P) {
   const words = $('words'), foot = $('foot');
   if (P.ti !== shown) {
     shown = P.ti; const tp = P.topic;
-    $('then').textContent = tp.then; $('main').textContent = tp.now; $('fact').textContent = tp.fact;
+    $('then').textContent = tp.then; $('main').textContent = tp.now; $('fact').textContent = tp.fact || '';
     $('src').textContent = 'Sources: ' + tp.src + '. Time scale: ' + SCALE_SRC + '.'; $('key').classList.toggle('off', !tp.signal);
     [...nav.children].forEach((bt, i) => bt.classList.toggle('on', i === P.ti));
     nav.children[P.ti].scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });

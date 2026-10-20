@@ -80,15 +80,15 @@ function resize() {
 }
 // the tallest each block of words gets at this size and width, across all topics: [then, now, sources]
 function heights(fs, width) {
-  const a = $('then'), b = $('now'), f = $('foot'), keep = [a.textContent, $('main').textContent, $('fact').textContent, $('src').textContent];
+  const a = $('then'), b = $('now'), f = $('foot'), keep = [a.textContent, $('main').textContent, $('src').textContent];
   a.style.cssText = b.style.cssText = `left:0;top:0;width:${width}px;font-size:${fs}px;visibility:hidden`;
   f.style.cssText = `left:0;top:0;width:${width}px;visibility:hidden`;
   const out = [0, 0, 0];
   for (const tp of TOPICS) {
-    a.textContent = tp.then; $('main').textContent = tp.now; $('fact').textContent = tp.fact; $('src').textContent = srcText(tp);
+    a.textContent = tp.then; $('main').textContent = tp.now; $('src').textContent = srcText(tp);
     out[0] = Math.max(out[0], a.offsetHeight); out[1] = Math.max(out[1], b.offsetHeight); out[2] = Math.max(out[2], f.offsetHeight);
   }
-  [a.textContent, $('main').textContent, $('fact').textContent, $('src').textContent] = keep;
+  [a.textContent, $('main').textContent, $('src').textContent] = keep;
   return out;
 }
 const srcText = (tp) => 'Sources: ' + tp.src + '. Time scale: ' + SCALE_SRC + '.';
@@ -220,7 +220,7 @@ function ui(P) {
   const words = $('words');
   if (P.ti !== shown) {
     shown = P.ti; const tp = P.topic;
-    $('then').textContent = tp.then; $('main').textContent = tp.now; $('fact').textContent = tp.fact;
+    $('then').textContent = tp.then; $('main').textContent = tp.now;
     $('src').textContent = srcText(tp); $('key').classList.toggle('off', !tp.signal);
     [...nav.children].forEach((bt, i) => bt.classList.toggle('on', i === P.ti));
     const on = nav.children[P.ti]; nav.scrollTo({ left: on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2, behavior: 'smooth' });
