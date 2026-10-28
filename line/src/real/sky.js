@@ -7,12 +7,29 @@ import { Sky } from 'three/addons/objects/Sky.js';
 
 export function sunDir(elevDeg, azDeg) { return new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - elevDeg), THREE.MathUtils.degToRad(azDeg)); }
 
-export function daySky({ sun, turbidity = 5, rayleigh = 1.6, mie = 0.004, mieG = 0.82, clouds = 0.25, cloudScale = 0.0002, time = 0 } = {}) {
+// sunDeg: the sun disc's angular diameter (real: 0.53; the night sky's moon is drawn about 2 degrees wide)
+// hot: a sun that reads as the sun at card size (the studio cards): a filled disc, white-hot in the middle going warm
+// yellow to its rim (the rim at hotRim of the core's strength); the sky round it is lit by the Mie scatter, not by any
+// overlay
+export function daySky({ sun, turbidity = 5, rayleigh = 1.6, mie = 0.004, mieG = 0.82, clouds = 0.25, cloudScale = 0.0002, time = 0, sunDeg = null, hot = 0, hotRim = 0.06 } = {}) {
   const sky = new Sky(); sky.scale.setScalar(4000);
   const m = sky.material;
+  if (sunDeg) m.fragmentShader = m.fragmentShader.replace(/sunAngularDiameterCos = [0-9.]+;/, `sunAngularDiameterCos = ${Math.cos(sunDeg * Math.PI / 360).toFixed(12)};`);
   m.fragmentShader = m.fragmentShader
     .replace('vec3 sundiscColor = ( 760.0 * sundisc ) * min( vSunE * Fex, 80.0 );', 'vec3 sundiscColor = min( ( 760.0 * sundisc ) * min( vSunE * Fex, 80.0 ), vec3( 18.0 ) );')
     .replace('gl_FragColor = vec4( texColor, 1.0 );', 'gl_FragColor = vec4( min( texColor, vec3( 24.0 ) ), 1.0 );');
+  if (hot) m.fragmentShader = m.fragmentShader.replace('vec3 sundiscColor = min( ( 760.0 * sundisc ) * min( vSunE * Fex, 80.0 ), vec3( 18.0 ) );',
+    `float limb = clamp( ( cosTheta - sunAngularDiameterCos ) / ( 1.0 - sunAngularDiameterCos ), 0.0, 1.0 );
+     float tr = sqrt( 1.0 - limb );
+     vec3 sc = mix( vec3( 1.0, 0.94, 0.66 ), vec3( 1.0, 0.72, 0.2 ) * 0.62, smoothstep( 0.25, 0.75, tr ) );
+     sc = mix( sc, vec3( 1.0, 0.55, 0.13 ) * ${hotRim.toFixed(4)}, smoothstep( 0.75, 1.0, tr ) );
+     vec3 sundiscColor = sundisc * sc * uTint * ${hot.toFixed(3)} * uGain;`)
+    // the forward scatter round a low sun is warm (the aureole is yellow-white, the far sky blue): tint the scattered
+    // light by the angle to the sun, the sky's own brightness, nothing added on top
+    .replace('vec3 texColor = ( Lin + L0 ) * 0.04 + sundiscColor', 'vec3 texColor = ( Lin + L0 ) * 0.04 * mix( vec3( 1.0 ), vec3( 1.3, 1.02, 0.55 ), exp( -acos( clamp( cosTheta, -1.0, 1.0 ) ) / 0.45 ) ) + sundiscColor')
+    .replace('uniform float mieDirectionalG;', 'uniform float mieDirectionalG;\n\t\tuniform float uGain;\n\t\tuniform vec3 uTint;');
+  // uTint: the disc's colour as it sets (the animated cards warm it towards orange)
+  if (hot) { m.uniforms.uGain = { value: 1 }; m.userData.gain0 = 1; m.uniforms.uTint = { value: new THREE.Color(1, 1, 1) }; }
   const u = m.uniforms;
   u.sunPosition.value.copy(sun); u.turbidity.value = turbidity; u.rayleigh.value = rayleigh; u.mieCoefficient.value = mie; u.mieDirectionalG.value = mieG;
   if (u.cloudCoverage) { u.cloudCoverage.value = clouds; u.cloudScale.value = cloudScale; u.cloudSpeed.value = 0.00002; u.cloudElevation.value = 0.55; u.cloudDensity.value = 0.6; u.time.value = time; }
@@ -21,13 +38,15 @@ export function daySky({ sun, turbidity = 5, rayleigh = 1.6, mie = 0.004, mieG =
 }
 
 // night: a gradient dome with stars that twinkle, a faint Milky Way and an optional moon
-export function nightSky({ moon = null, seed = 1 } = {}) {
+// lift: a cinematic night, the dome raised to a moonlit blue (0 = the realistic near-black)
+// moonDeg: the moon disc's diameter in degrees (the default draws it about 2 degrees wide)
+export function nightSky({ moon = null, seed = 1, lift = 0, moonDeg = 0, moonBright = 1 } = {}) {
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false,
-    uniforms: { uMoon: { value: moon ? moon.clone().normalize() : new THREE.Vector3(0, -1, 0) }, uSeed: { value: seed }, uTime: { value: 0 } },
+    uniforms: { uMoon: { value: moon ? moon.clone().normalize() : new THREE.Vector3(0, -1, 0) }, uSeed: { value: seed }, uTime: { value: 0 }, uLift: { value: lift }, uMoonC: { value: moonDeg ? Math.cos(moonDeg * Math.PI / 360) : 0.99988 }, uMoonB: { value: moonBright } },
     vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w; }',
     fragmentShader: `
-      varying vec3 vDir; uniform vec3 uMoon; uniform float uSeed, uTime;
+      varying vec3 vDir; uniform vec3 uMoon; uniform float uSeed, uTime, uLift, uMoonC, uMoonB;
       float h(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
       float n(vec3 p){ vec3 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
         return mix(mix(mix(h(i), h(i+vec3(1,0,0)), f.x), mix(h(i+vec3(0,1,0)), h(i+vec3(1,1,0)), f.x), f.y), mix(mix(h(i+vec3(0,0,1)), h(i+vec3(1,0,1)), f.x), mix(h(i+vec3(0,1,1)), h(i+vec3(1,1,1)), f.x), f.y), f.z); }
@@ -40,8 +59,9 @@ export function nightSky({ moon = null, seed = 1 } = {}) {
         float milk = band * (n(d * 9.0 + uSeed) * 0.6 + n(d * 23.0) * 0.4);
         c += vec3(0.020, 0.022, 0.030) * milk * smoothstep(0.0, 0.25, y);
         c += vec3(0.9, 0.92, 1.0) * star * smoothstep(0.0, 0.12, y) * (1.0 - band * 0.0);
-        float md = dot(d, uMoon); c += vec3(0.95, 0.95, 0.9) * smoothstep(0.99985, 0.99992, md) * 6.0 + vec3(0.08, 0.09, 0.12) * pow(max(md, 0.0), 120.0) * 0.6;
+        float md = dot(d, uMoon); c += vec3(0.95, 0.95, 0.9) * smoothstep(uMoonC - 0.00003, uMoonC + 0.00004, md) * 6.0 * uMoonB + vec3(0.08, 0.09, 0.12) * pow(max(md, 0.0), 120.0) * 0.6;
         c = mix(c, vec3(0.028, 0.03, 0.045), (1.0 - smoothstep(0.0, 0.1, y)) * 0.6);
+        c += uLift * mix(vec3(0.05, 0.075, 0.13), vec3(0.018, 0.03, 0.07), pow(y, 0.6)) + uLift * vec3(0.06, 0.07, 0.09) * pow(max(md, 0.0), 24.0);
         gl_FragColor = vec4(c, 1.0);
       }`,
   });

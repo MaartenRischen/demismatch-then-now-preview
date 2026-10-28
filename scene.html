@@ -9,11 +9,11 @@ import { createStage } from './line/src/real/stage.js';
 import { buildAncestors } from './line/src/real/world.js';
 const q = new URLSearchParams(location.search), W = +(q.get('w') || innerWidth), H = Math.round(W * 9 / 16);
 const stage = createStage({ width: W, height: H, dpr: 1 }); document.body.appendChild(stage.canvas);
-const S = buildAncestors({ topic: q.get('topic') || 'strangers', g: +(q.get('g') || 4000), renderer: stage.renderer, opts: { habitat: q.get('habitat') || undefined, time: q.get('time') || undefined } });
+const S = buildAncestors({ topic: q.get('topic') || 'strangers', g: +(q.get('g') || 4000), renderer: stage.renderer, opts: { habitat: q.get('habitat') || undefined, time: q.get('time') || undefined, snow: q.has('snow') ? q.get('snow') === '1' : undefined, region: q.get('region') || undefined } });
 if (!q.has('raw')) S.expose(stage);
 document.getElementById('info').textContent = JSON.stringify(S.info);
 const T = q.has('t') ? +q.get('t') : null, off = Object.fromEntries((q.get('off') || '').split(',').filter(Boolean).map((k) => [k, true]));
 const frame = (t) => { S.update(t); stage.render(S.scene, S.camera, t, { ...S.look, off, ...(q.has('exp') ? { exposure: +q.get('exp') } : {}) }); };
 if (T !== null) { frame(T); frame(T); window.ready = true; } else { const t0 = performance.now(); const loop = () => { frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); }; loop(); window.ready = true; }
-window.info = S.info;
+window.info = S.info; window.S = S; window.frame = frame;
 </script></body></html>

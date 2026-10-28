@@ -235,17 +235,24 @@ export function farHills({ seed, radius = 1400, height = 120, color = '#7F8A93',
 }
 
 // ---------- many trees far off: a trunk and a flat dark crown each, instanced, for the depth of a plain ----------
-export function farTrees({ height, seed, n = 160, near = 110, far = 900, color = '#4C5634', avoid = () => false }) {
+// half: only inside the terrain mesh (terrain() is a size x size square, default 900, so +-450): a tree placed beyond
+// it stands on the height function where no ground is drawn and floats in the sky over the far hills
+// shape: 'flat' (acacia crowns, the default), 'round' (broadleaf domes), 'cone' (spruce spires), 'palm' (a thin stem
+// with a small starry crown); size scales the trees (a forest's wall stands taller than the plain's scattered trees)
+export function farTrees({ height, seed, n = 160, near = 110, far = 900, color = '#4C5634', avoid = () => false, half = 440, shape = 'flat', size = 1 }) {
   const R = rng(seed + 0.77), trunk = new THREE.CylinderGeometry(0.12, 0.2, 1, 5); trunk.translate(0, 0.5, 0);
-  const crown = new THREE.SphereGeometry(1, 16, 8); { const p = crown.attributes.position, v = new THREE.Vector3(); for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const k = 1 + (fbm2(v.x * 2 + seed, v.z * 2, seed, 3) - 0.5) * 0.5; p.setXYZ(i, v.x * k, v.y * (v.y > 0 ? 0.32 : 0.12) * k, v.z * k); } crown.computeVertexNormals(); }
+  const crown = shape === 'cone' ? new THREE.ConeGeometry(1, 1, 9, 3) : new THREE.SphereGeometry(1, 16, 8); { const p = crown.attributes.position, v = new THREE.Vector3(), fy = shape === 'round' ? [0.8, 0.45] : shape === 'palm' ? [0.25, 0.2] : [0.32, 0.12]; for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const k = 1 + (fbm2(v.x * 2 + seed, v.z * 2, seed, 3) - 0.5) * 0.5; if (shape === 'cone') p.setXYZ(i, v.x * k, v.y + 0.5, v.z * k); else p.setXYZ(i, v.x * k, v.y * (v.y > 0 ? fy[0] : fy[1]) * k, v.z * k); } crown.computeVertexNormals(); }
   const tm = new THREE.InstancedMesh(trunk, new THREE.MeshStandardMaterial({ color: '#3B332B', roughness: 1 }), n);
   const cm = new THREE.InstancedMesh(crown, new THREE.MeshStandardMaterial({ color, roughness: 1 }), n);
   const M = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(); let k = 0;
   for (let i = 0; i < n * 3 && k < n; i++) {
     const a = R() * Math.PI * 2, d = near + (far - near) * Math.pow(R(), 0.7), x = Math.cos(a) * d, z = Math.sin(a) * d;
-    if (avoid(x, z)) continue; const y = height(x, z), H = R.range(3.5, 7.5), W = R.range(2.5, 5.5);
+    if (avoid(x, z) || Math.abs(x) > half || Math.abs(z) > half) continue; const y = height(x, z), H = R.range(3.5, 7.5) * size, W = R.range(2.5, 5.5) * size;
     q.identity(); s.set(1.3, H * 0.85, 1.3); p.set(x, y, z); M.compose(p, q, s); tm.setMatrixAt(k, M);
-    s.set(W, W * R.range(0.8, 1.2), W * R.range(0.8, 1.1)); p.set(x + R.range(-0.4, 0.4), y + H * 0.85, z); M.compose(p, q, s); cm.setMatrixAt(k, M); k++;
+    if (shape === 'cone') { const ch = H * R.range(1.6, 2.4); s.set(W * 0.42, ch, W * 0.42); p.set(x, y + H * 0.15, z); }
+    else if (shape === 'palm') { s.set(1.3, H * 1.6, 1.3); M.compose(p.set(x, y, z), q, s); tm.setMatrixAt(k, M); s.set(W * 0.6, W * 0.6, W * 0.6); p.set(x, y + H * 1.6, z); }
+    else { s.set(W, W * R.range(0.8, 1.2), W * R.range(0.8, 1.1)); p.set(x + R.range(-0.4, 0.4), y + H * (shape === 'round' ? 1.0 : 0.85), z); }
+    M.compose(p, q, s); cm.setMatrixAt(k, M); k++;
   }
   tm.count = cm.count = k; const g = new THREE.Group(); g.add(tm, cm); return g;
 }

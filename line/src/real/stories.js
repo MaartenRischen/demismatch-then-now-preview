@@ -3,6 +3,7 @@
 // stand, which way the light falls. The camp sits around the origin and the camera mostly looks towards -z.
 // A figure: { kind, pose, x, z, yaw (0 faces +z, PI faces -z), o: pose options, hold: { type, hand }, walk: { speed } }.
 // Most stories hold several situations (variants) and R picks one that fits the time of day; ?v=N forces variant N.
+import { bowAt } from './era.js';
 import { held, spearAt, diggingStick, spearStuck, handStone, carcass, beast, honeycomb, meat, roots, nutsAnvil, firewood, bag, hole, target, rack, log, flask, baby, boulder, climbTree, cloak, together } from './props-anc.js';
 
 const PI = Math.PI;
@@ -59,8 +60,9 @@ const hold = (make, spec, hand = 'r') => ({ type: 'custom', hand, make: (R) => h
 const both = (...hs) => ({ type: 'custom', hand: 'r', make: (R) => together(...hs.map((h) => h.make(R))) });
 const bagM = (R) => bag(R, { size: R.range(0.75, 0.95) }), woodM = (R) => firewood(R, { tied: true, n: 8, len: R.range(0.9, 1.2) });
 const HOLD = {
-  spear: (len = 2.1) => hold((R) => spearAt(R, { length: len, grip: 0.52 }), { at: 'rWr', frame: 'body', rot: [0.04, 0, 0] }),
-  spearCarry: (len = 2.0) => hold((R) => spearAt(R, { length: len, grip: 0.5 }), { at: 'rWr', frame: 'body', rot: [0.5, 0, 0] }),
+  // where and when there were bows (era.js), world.js gives some of the spear carriers a bow instead (alt)
+  spear: (len = 2.1) => ({ ...hold((R) => spearAt(R, { length: len, grip: 0.52 }), { at: 'rWr', frame: 'body', rot: [0.04, 0, 0] }), era: 'bow', alt: hold((R) => bowAt(R), { at: 'rWr', frame: 'body', rot: [0.04, 0, 0] }) }),
+  spearCarry: (len = 2.0) => ({ ...hold((R) => spearAt(R, { length: len, grip: 0.5 }), { at: 'rWr', frame: 'body', rot: [0.5, 0, 0] }), era: 'bow', alt: hold((R) => bowAt(R), { at: 'rWr', frame: 'body', rot: [0.5, 0, 0] }) }),
   throwSpear: (len = 2.0) => hold((R) => spearAt(R, { length: len, grip: 0.45 }), { at: 'rWr', frame: 'body', rot: [1.42, 0, 0] }),
   smallSpear: () => hold((R) => spearAt(R, { length: 1.2, grip: 0.45 }), { at: 'rWr', frame: 'body', rot: [1.3, 0, 0] }),
   spear2: () => hold((R) => spearAt(R, { length: 2.1, grip: 0.3 }), { between: ['rWr', 'lWr'], t: 0.5 }),
@@ -500,7 +502,7 @@ export const STORIES = {
       dress(R, props, camera, { r: 4.5, n: 1, hides: 1 });
       return { figures, props, camera, clear: [[0, 0, 3, 2]] };
     } },
-  ], { salt: 218 }),
+  ], { salt: 218, noSnow: true, avoid: ['ice'] }), // sweet and fat things to find: no deep winter
 
   // For 300,000 years, your work fed people you knew: the food comes in and the people it is for are right there
   burnout: story(['day', 'day', 'dusk'], [
@@ -549,7 +551,7 @@ export const STORIES = {
       const figures = [], props = [], oy = R.range(0, 6.28);
       figures.push(F('old', R.pick(['sitKnees', 'reach']), 0, 0, oy, { sit: true, lookY: 0 }));
       const wx = Math.sin(oy) * 0.95, wz = Math.cos(oy) * 0.95;
-      figures.push(F(R.pick(['woman', 'teen']), 'give', wx, wz, oy + PI, { crouch: true }, { alarm: true, hold: HOLD.hand((R) => flask(R, { size: 1.1 })) }));
+      figures.push(F(R.pick(['woman', 'teen']), 'give', wx, wz, oy + PI, { crouch: true }, { alarm: true, hold: { ...HOLD.hand((R) => flask(R, { size: 1.1 })), era: 'noEggs', alt: HOLD.hand((R) => bag(R, { size: 0.5 })) } })); // an ostrich-egg flask only where there were ostriches to lay them
       props.push({ type: 'shelter', x: -Math.sin(oy) * 1.8 + Math.cos(oy) * 0.8, z: -Math.cos(oy) * 1.8 - Math.sin(oy) * 0.8, o: { size: 1.0 } });
       if (R() < 0.6) figures.push(F('child', 'sitKnees', Math.cos(oy) * 1.0, -Math.sin(oy) * 1.0, oy + 0.6));
       if (time !== 'day') props.push({ ...fireAt(0, 0, 0.5, time), behind: 1.6 });
@@ -649,7 +651,7 @@ export const STORIES = {
     { name: 'spears coming down', make: (c) => aftermath(c, 'spears') },
     { name: 'already back at work', make: (c) => aftermath(c, 'work') },
     { name: 'walking back', make: (c) => aftermath(c, 'back') },
-  ], { salt: 4 }),
+  ], { salt: 4, noRegions: ['sahul'] }), // the danger is a lion or a hyena: none in Australia
 
   // For 300,000 years, you compared yourself to a few dozen people: one shows a skill, the band you know watches
   compare: story(['day', 'day', 'dusk'], [

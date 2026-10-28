@@ -279,7 +279,7 @@ export function citySky({ zenith = '#03050C', horizon = '#2A1A10', glow = 1, clo
 // buildings as instanced boxes whose faces are covered in a grid of windows, some lit (warm, cool, a few with a TV's
 // blue), some floors dark. The grid fades to its average when a window shrinks below a pixel, so a far city does not
 // shimmer. list: [{ x, z, w, d, h, rot }]
-export function buildings(list, { lit = 0.32, facade = '#3A3835', floorH = 3.0, bright = 1, shops = 0, seed = 1, street = 0 } = {}) {
+export function buildings(list, { lit = 0.32, facade = '#3A3835', floorH = 3.0, bright = 1, shops = 0, seed = 1, street = 0, glassRough = 0.12 } = {}) {
   const g = new THREE.BoxGeometry(1, 1, 1); g.translate(0, 0.5, 0);
   const m = new THREE.MeshStandardMaterial({ color: facade, roughness: 0.85 });
   const U = { uLit: { value: lit }, uFH: { value: floorH }, uBr: { value: bright }, uShop: { value: shops }, uT: { value: 0 }, uSeed: { value: seed }, uSt: { value: street } };
@@ -311,7 +311,7 @@ export function buildings(list, { lit = 0.32, facade = '#3A3835', floorH = 3.0, 
     color: `vec3 bn = normalize(vNw); float bidC = h21(floor(vW.xz / 7.0) + uSeed); float glz = 0.0;
       if (bn.y < 0.5) { vec2 bf = abs(bn.x) > 0.5 ? vec2(vW.z, vW.y) : vec2(vW.x, vW.y); vec4 W = winAt(bf, vBid, bn.x + bn.z * 2.0, glz); }
       diffuseColor.rgb *= (1.0 - glz * 0.8) * (0.8 + 0.4 * h11(vBid * 4.4));`,
-    rough: 'roughnessFactor = mix(roughnessFactor, 0.12, glz);',
+    rough: `roughnessFactor = mix(roughnessFactor, ${glassRough.toFixed(3)}, glz);`,
     emit: `{ vec3 bn2 = normalize(vNw); if (bn2.y < 0.5) { float g2; vec2 bf2 = abs(bn2.x) > 0.5 ? vec2(vW.z, vW.y) : vec2(vW.x, vW.y);
         vec4 W2 = winAt(bf2, vBid, bn2.x + bn2.z * 2.0, g2); totalEmissiveRadiance += W2.rgb * uBr;
         totalEmissiveRadiance += vec3(1.0, 0.75, 0.45) * uShop * step(vW.y - uSt, 3.2) * step(0.6, vW.y - uSt) * (0.6 + 0.4 * vn2(vW.xz * 0.3)) * step(0.4, vn2(vec2(vW.x + vW.z, 1.0) * 0.12)); } }`,

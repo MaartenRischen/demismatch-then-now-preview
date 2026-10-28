@@ -16,7 +16,7 @@ const WOODS = ['beech', 'beech', 'birch', 'pine', 'ash', 'oak'];
 const yawTo = (x, z, tx, tz) => Math.atan2(tx - x, tz - z);
 
 // ---------- the toolkit each scene builds with ----------
-function kit(renderer, key) {
+export function kit(renderer, key) {
   I.initRectLights();
   let h = 7; for (const c of key) h = (h * 31 + c.charCodeAt(0)) % 9973;
   const R = rng(h), scene = new THREE.Scene(), updates = [], figs = [];
@@ -70,7 +70,7 @@ function kit(renderer, key) {
 // sit a figure so its pelvis rests at height y (the seat top), sunk in by `sink`
 const _v = new THREE.Vector3();
 const SEAT_PTS = [[0, -0.1, 0], [0, -0.07, -0.08], [0.06, -0.08, 0.02], [-0.06, -0.08, 0.02]];
-function seatOn(m, y, sink) {
+export function seatOn(m, y, sink) {
   m.root.position.y = 0; m.root.updateMatrixWorld(true);
   let lo = Infinity; for (const p of SEAT_PTS) { m.world(m.J.hips, _v.set(...p)); lo = Math.min(lo, _v.y); }
   m.root.position.y = y - sink - lo; m.root.updateMatrixWorld(true);
@@ -93,7 +93,7 @@ function nightStreet(K, { level = 8, across = -26, seed = 4, lit = 0.3, lamps = 
 // lay a figure on a mattress: its torso (pelvis, shoulders, head) rests on the surface, sunk in a little; arms and
 // legs may press into the mattress (as they do), so a dangling arm or a dropped knee does not lift the body
 const LIE_PTS = [['hips', [0.13, 0, 0]], ['hips', [-0.13, 0, 0]], ['hips', [0, -0.08, -0.1]], ['chest', [0.17, 0.26, 0]], ['chest', [-0.17, 0.26, 0]], ['chest', [0, 0.2, -0.1]], ['head', [0.08, 0.11, 0]], ['head', [-0.08, 0.11, 0]], ['head', [0, 0.11, -0.1]]];
-function lieOn(m, y, sink) {
+export function lieOn(m, y, sink) {
   m.root.position.y = 0; m.root.updateMatrixWorld(true);
   let lo = Infinity; for (const [j, p] of LIE_PTS) { m.world(m.J[j], _v.set(...p)); lo = Math.min(lo, _v.y); }
   m.root.position.y = y - sink - lo; m.root.updateMatrixWorld(true);
@@ -622,8 +622,10 @@ const SCENES = {
 
 export const NOW_KEYS = ['strangers', 'leftout', 'night', 'teens', 'restless', 'effort', 'cravings', 'burnout', 'newparent', 'news', 'compare', 'touch', 'speaking', 'useful', 'winter', 'crowd'];
 
+// opts.def: a scene function from outside this file (the swap cards). A scene that returns lock: true keeps its
+// camera exactly where it says: no handheld drift, no push.
 export function buildNow({ key = 'night', renderer, opts = {} }) {
-  const def = SCENES[key] || SCENES.night, K = kit(renderer, key), S = def(K, opts), { scene } = K;
+  const def = opts.def || SCENES[key] || SCENES.night, K = kit(renderer, key), S = def(K, opts), { scene } = K;
   if (typeof S.cam.target === 'function') S.cam.target = S.cam.target().toArray(); // aimed at a point on the figure
   if (typeof S.cam.pos === 'function') S.cam.pos = S.cam.pos().toArray();
   if (opts.cam) S.cam = { ...S.cam, ...opts.cam }; // a debug viewpoint
@@ -642,6 +644,7 @@ export function buildNow({ key = 'night', renderer, opts = {} }) {
     for (const F of K.figs) F.place(t);
     for (const u of K.updates) u(t);
     for (const f of fns) f(t);
+    if (S.lock) { camera.position.copy(pos); camera.lookAt(tgt); look.focus = camera.position.distanceTo(K.head(you, hv)); return; }
     const p = push * 8 * (1 - Math.exp(-t / 8));
     camera.position.copy(pos).addScaledVector(dir, p);
     camera.position.x += 0.008 * Math.sin(t * 0.9) + 0.003 * Math.sin(t * 2.3 + 1); camera.position.y += 0.006 * Math.sin(t * 0.7 + 1) + 0.0025 * Math.sin(t * 2.9);
@@ -650,5 +653,5 @@ export function buildNow({ key = 'night', renderer, opts = {} }) {
   }
   update(0);
   const youPoint = (v = new THREE.Vector3()) => you.m.world(you.m.J.head, v.set(0, 0.11, 0));
-  return { scene, camera, look, update, youPoint, alarmPoint: (v = new THREE.Vector3()) => (S.alarm ? youPoint(v) : null), info: { key, alarm: !!S.alarm, figures: K.figs.length } };
+  return { scene, camera, look, update, youPoint, K, S, alarmPoint: (v = new THREE.Vector3()) => (S.alarm ? youPoint(v) : null), info: { key, alarm: !!S.alarm, figures: K.figs.length } };
 }

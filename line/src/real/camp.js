@@ -66,21 +66,69 @@ export function fire({ seed = 1, size = 1, night = true, shadows = true }) {
 }
 
 // ---------- a brush shelter: bent sticks in a dome, thatched with dry grass ----------
-export function shelter({ seed = 1, size = 1, grassColor = '#9C8656' }) {
+// cover: 'thatch' (grass, the default), 'leaf' (big leaves, the wet tropics), 'hide' (skins laced over the frame, the
+// cold north), 'bark' (sheets of bark, Australia). form: 'dome' (the default), 'cone' (a hide tent on poles), 'bone'
+// (a dome weighted with mammoth jaws and tusks, the glacial plains), 'pit' (a low roof over a dug floor, East Asia
+// after the ice), 'lean' (a lean-to, open at the front). See era.js.
+export function shelter({ seed = 1, size = 1, grassColor = '#9C8656', cover = 'thatch', form = 'dome' }) {
   const R = rng(seed), grp = new THREE.Group(), stick = wood('#6B5A44');
   const r = 1.3 * size, h = 1.35 * size;
   // thatch: a lumpy dome with an opening, straw-coloured, rough
   const g = new THREE.SphereGeometry(r, 48, 24, 0.5, Math.PI * 2 - 1.1, 0, Math.PI / 2), p = g.attributes.position, v = new THREE.Vector3();
   for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const n = Math.sin(v.x * 9 + seed) * Math.cos(v.z * 8) * 0.04 + (R() - 0.5) * 0.05; v.multiplyScalar(1 + n); v.y *= h / r; p.setXYZ(i, v.x, v.y, v.z); }
   g.computeVertexNormals();
-  const thatch = new THREE.MeshStandardMaterial({ color: grassColor, roughness: 1, side: THREE.DoubleSide });
+  const colour = { thatch: grassColor, leaf: '#6A6640', hide: '#82603F', bark: '#6E6254' }[cover] || grassColor;
+  const body = {
+    thatch: 'float straw = vnoise(vec3(atan(vP.z, vP.x) * 60.0, vP.y * 4.0, 0.0)); diffuseColor.rgb *= 0.55 + 0.6 * straw * (0.7 + 0.3 * fbm3(vP * 6.0));',
+    leaf: 'float lf = vnoise(vec3(atan(vP.z, vP.x) * 14.0, vP.y * 7.0, 0.0)); diffuseColor.rgb *= 0.55 + 0.6 * lf; diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.42, 0.34, 0.2), smoothstep(0.6, 0.8, fbm3(vP * 3.0)) * 0.6);',
+    hide: 'float pc = fbm3(vP * 2.2), seam = smoothstep(0.035, 0.0, abs(fract(atan(vP.z, vP.x) * 1.6 + pc * 0.4) - 0.5) - 0.46); diffuseColor.rgb *= (0.75 + 0.4 * pc) * (1.0 - seam * 0.45) * (0.92 + 0.12 * vnoise(vP * 30.0));',
+    bark: 'float st = vnoise(vec3(atan(vP.z, vP.x) * 9.0, vP.y * 30.0, 0.0)); diffuseColor.rgb *= 0.6 + 0.5 * st * (0.7 + 0.3 * fbm3(vP * 4.0));',
+  }[cover] || '';
+  const thatch = new THREE.MeshStandardMaterial({ color: colour, roughness: cover === 'hide' ? 0.8 : 1, side: THREE.DoubleSide });
   thatch.onBeforeCompile = (sh) => { sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vP;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvP = position;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vP;\n' + NOISE_GLSL).replace('#include <color_fragment>', '#include <color_fragment>\nfloat straw = vnoise(vec3(atan(vP.z, vP.x) * 60.0, vP.y * 4.0, 0.0)); diffuseColor.rgb *= 0.55 + 0.6 * straw * (0.7 + 0.3 * fbm3(vP * 6.0));'); };
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vP;\n' + NOISE_GLSL).replace('#include <color_fragment>', '#include <color_fragment>\n' + body); };
+  thatch.customProgramCacheKey = () => 'shelter-' + cover; // one shader per cover (the compile hook's text is the same for all)
+  if (form !== 'dome') return otherForm({ R, grp, form, r, h, size, mat: thatch, stick });
   const dome = new THREE.Mesh(g, thatch); dome.castShadow = dome.receiveShadow = true; grp.add(dome);
   // ribs of bent sticks poking through, and a few loose sticks
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * Math.PI * 2 + R() * 0.2, pts = []; for (let k = 0; k <= 8; k++) { const u = k / 8, th = u * Math.PI * 0.55; pts.push(new THREE.Vector3(Math.cos(a) * Math.cos(th) * r * 1.03, Math.sin(th) * h * 1.03 + (u > 0.9 ? 0.15 : 0), Math.sin(a) * Math.cos(th) * r * 1.03)); }
     const m = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 12, 0.018 * size, 5), stick); m.castShadow = true; grp.add(m);
+  }
+  grp.rotation.y = R() * Math.PI * 2;
+  return grp;
+}
+
+function otherForm({ R, grp, form, r, h, size, mat, stick }) {
+  const add = (geo, m = mat) => { const o = new THREE.Mesh(geo, m); o.castShadow = o.receiveShadow = true; grp.add(o); return o; };
+  const pole = (a, b, rad = 0.025) => { const d = new THREE.Vector3().subVectors(b, a), o = add(new THREE.CylinderGeometry(rad * size, rad * size * 1.2, d.length(), 6), stick); o.position.copy(a).addScaledVector(d, 0.5); o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); };
+  if (form === 'cone' || form === 'pit') {
+    // a cone of hide (or thatch) round a door gap; the poles cross above the smoke hole. A pit house is lower and
+    // wider, its roof starting from a bank of earth round the dug floor
+    const pit = form === 'pit', R0 = (pit ? 2.0 : 1.35) * size, H = (pit ? 1.9 : 2.6) * size, y0 = pit ? 0.25 * size : 0;
+    const pts = []; for (let i = 0; i <= 12; i++) { const u = i / 12; pts.push(new THREE.Vector2(Math.max(0.06 * size, R0 * (1 - u) * (1 + 0.04 * Math.sin(u * 9))), y0 + H * u * 0.94)); }
+    const cone = new THREE.LatheGeometry(pts, 40, 0.45, Math.PI * 2 - 0.8), p = cone.attributes.position;
+    for (let i = 0; i < p.count; i++) { const n = (R() - 0.5) * 0.03 * size; p.setX(i, p.getX(i) * (1 + n)); p.setZ(i, p.getZ(i) * (1 + n)); }
+    cone.computeVertexNormals(); add(cone);
+    const top = new THREE.Vector3(0, y0 + H * 1.12, 0);
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2 + R() * 0.2, base = new THREE.Vector3(Math.cos(a) * R0 * 1.02, y0, Math.sin(a) * R0 * 1.02); pole(base, top.clone().add(new THREE.Vector3(-Math.cos(a) * 0.18, R.range(0, 0.25), -Math.sin(a) * 0.18).multiplyScalar(size))); }
+    if (pit) { const bank = add(new THREE.TorusGeometry(R0 * 1.02, 0.32 * size, 8, 40), new THREE.MeshStandardMaterial({ color: '#6A5A44', roughness: 1 })); bank.rotation.x = Math.PI / 2; bank.scale.z = 0.55; bank.position.y = 0.02; }
+  } else if (form === 'bone') {
+    // the dome under hides, its foot walled with mammoth jaws stacked chin-down, two tusks arched over the door
+    const g = new THREE.SphereGeometry(r * 1.25, 40, 20, 0.5, Math.PI * 2 - 1.1, 0, Math.PI / 2); g.scale(1, (h * 1.1) / (r * 1.25), 1); add(g);
+    // the dome's door gap is at phi = -0.05 (SphereGeometry puts phi at x = -cos, z = sin): jaws all round but there
+    const bone = new THREE.MeshStandardMaterial({ color: '#CDBFA2', roughness: 0.75 }), at = (phi, rad, y = 0) => new THREE.Vector3(-Math.cos(phi) * rad, y, Math.sin(phi) * rad);
+    for (let i = 0; i < 26; i++) { const phi = 0.75 + (i / 25) * (Math.PI * 2 - 1.5), jaw = add(new THREE.TorusGeometry(0.16 * size, 0.06 * size, 6, 12, Math.PI), bone);
+      jaw.position.copy(at(phi, r * 1.3, 0.05 + (i % 2) * 0.14 * size)); jaw.rotation.set(Math.PI, Math.atan2(-Math.cos(phi), Math.sin(phi)), R.range(-0.3, 0.3), 'YXZ'); }
+    for (const sd of [-1, 1]) { const phi = -0.05 + sd * 0.42, b = at(phi, r * 1.3), pts = [b, at(phi, r * 1.36, h * 0.75), at(-0.05, r * 1.4, h * 1.05)];
+      add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 16, 0.06 * size, 8), bone); }
+  } else if (form === 'lean') {
+    // a sheet of bark on a ridge pole between two forked sticks, sloping to the ground at the back
+    const W = 2.2 * size, D = 1.6 * size, Hh = 1.3 * size, sheet = new THREE.PlaneGeometry(W, Math.hypot(D, Hh), 10, 6), p = sheet.attributes.position;
+    for (let i = 0; i < p.count; i++) p.setZ(i, (R() - 0.5) * 0.04 + Math.sin(p.getX(i) * 6) * 0.02);
+    sheet.computeVertexNormals(); const o = add(sheet); o.rotation.x = -Math.atan2(Hh, D) - Math.PI / 2 + Math.PI; o.position.set(0, Hh / 2, -D / 2);
+    for (const s of [-1, 1]) pole(new THREE.Vector3(s * W * 0.45, 0, 0.05), new THREE.Vector3(s * W * 0.45, Hh + 0.1, 0.0), 0.03);
+    pole(new THREE.Vector3(-W * 0.55, Hh, 0), new THREE.Vector3(W * 0.55, Hh, 0), 0.03);
   }
   grp.rotation.y = R() * Math.PI * 2;
   return grp;
